@@ -61,11 +61,70 @@ void mha(){
 
 };
 
+#define layer_norm_eps 1e-5f
+
+void layernorm(
+    float* prenorm,
+    float* postnorm,
+    int B,
+    int T,
+    int C,
+    float* ln_weights, // gamma
+    float* ln_bias     // beta
+){
+    for(int b = 0; b < B; b++){
+        for(int t = 0; t < T; t++){
+
+            float* xid = prenorm  + b*T*C + t*C;
+            float* yid = postnorm + b*T*C + t*C;
+
+            // mean
+            float mean = 0.0f;
+            for(int c = 0; c < C; c++){
+                mean += xid[c];
+            }
+            mean /= C;
+
+            // variance
+            float var = 0.0f;
+            for(int c = 0; c < C; c++){
+                float diff = xid[c] - mean;
+                var += diff * diff;
+            }
+            var /= C;
+
+            float inv_std = 1.0f / sqrtf(var + layer_norm_eps);
+
+            // normalized
+            for(int c = 0; c < C; c++){
+                yid[c] = ln_weights[c] * (xid[c] - mean) * inv_std
+                       + ln_bias[c];
+            }
+        }
+    }
+}
+
+
 // for residual connection
-void addNorm(){
+void addNorm(
+    float* residual,   // x
+    float* prenorm,    
+    float* out,        
+    int B,
+    int T,
+    int C,
+    float* postnorm,   
+    float* ln_weights, // gamma
+    float* ln_bias     // beta
+){
+    layernorm(prenorm, postnorm, B, T, C, ln_weights, ln_bias);
 
+    int N = B * T * C;
+    for(int i = 0; i < N; i++){
+        out[i] = residual[i] + postnorm[i];
+    }
+}
 
-};
 
 // softmax activation function
 void softmax(){
