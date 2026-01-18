@@ -2,10 +2,59 @@
 #include <cmath>
 using namespace std;
 
-// for feed forward block
-void mlp(){
+void linear(int B, 
+            int T, 
+            int dim1, 
+            int dim2,
+            float* inp, 
+            float* weights, 
+            float* bias,
+            float* out
+){
+    for(int b = 0; b < B; b++){
+        for(int t = 0; t < T; t++){
+            float* xid = inp+b*T*dim1+t*dim1;
+            float* yid = out + b*T*dim2 + t*dim2;
+            for(int v = 0;v < dim2;v++){
+                float* wid = weights + v*dim1;
+                float o = bias ? bias[v] : 0.0f;
+                for (int c = 0; c < dim1; c++) {
+                    o += xid[c] * wid[c];
+                }
 
+                yid[v] = o;
+            }
+        }
+    }
+}
+
+
+// for feed forward block
+void mlp(int B,
+        int T, 
+        int C, 
+        int hidden_dim, 
+        float* inp,
+        float* out,
+        float* c_fc, // this upscaling weights
+        float* c_fc_bais, // this upscaling bias
+        float* c_proj, // this is downscaling weights
+        float* c_proj_bais, // this downscaling bias
+        float* inter_preact, // output from the upscaling layer and without activation
+        float* inter_act
+){
+    // upscaling from C to hidden_dim
+    linear(B,T,C,hidden_dim,inp,c_fc,c_fc_bais,inter_preact);
+    
+    // gelu activation
+    gelu(inter_preact,inter_act,B*T*hidden_dim);
+
+    // todo dropout
+
+    //downscaling from hidden_dim to C
+    linear(B,T,hidden_dim,C,inter_act,c_proj,c_proj_bais,out);
 };
+
 
 // mha: Multi headed attention
 void mha(){
@@ -14,6 +63,7 @@ void mha(){
 
 // for residual connection
 void addNorm(){
+
 
 };
 
