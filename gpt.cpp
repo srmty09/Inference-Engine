@@ -56,10 +56,75 @@ void mlp(int B,
 };
 
 
-// mha: Multi headed attention
-void mha(){
+void mha(
+    float* c_attn,        // (3C, C)
+    float* c_attn_bias,   // (3C)
+    float* inp,           // (B, T, C)
+    float* qkv,           // (B, T, 3C)
+    float* preattn,       // (B, NH, T, T)
+    float* attn,          // (B, NH, T, T)
+    float* out,           // (B, T, C)
+    int B,
+    int T,
+    int C,
+    int NH,
+    float* wo             // c_proj weight (C, C)
+){
+    int hs = C / NH;
+    float scale = 1.0f / sqrtf(hs);
 
-};
+    linear(B, T, C, 3*C, inp, c_attn, c_attn_bias, qkv);
+    for(int b = 0; b < B; b++){
+        for(int h = 0; h < NH; h++){
+
+            float* Q = qkv + b*T*3*C + h*hs;
+            float* K = qkv + b*T*3*C + C + h*hs;
+            float* scores = preattn + b*NH*T*T + h*T*T;
+            linear(
+                1, T, hs, T,
+                Q, K, nullptr, scores
+            );
+
+            for(int i = 0; i < T*T; i++){
+                scores[i] *= scale;
+            }
+            // causal mask 
+            for(int t = 0; t<T;t++){
+                for(int t2 = t+1; t2<T;t2++){
+                    scores[t*T+t2] = -INFINITY; 
+                }
+            }
+
+            // softmax
+            softmax();
+
+        }
+    }    
+
+
+    for(int b = 0; b < B; b++){
+        for(int h = 0; h < NH; h++){
+
+            float* A = attn + b*NH*T*T + h*T*T;
+            float* V = qkv + b*T*3*C + 2*C + h*hs;
+            float* O = out + b*T*C + h*hs;
+
+            // A: (T, T)
+            // V: (T, hs)
+            linear(
+                1, T, T, hs,
+                A, V, nullptr, O
+            );
+        }
+    }
+
+    linear(B, T, C, C, out, wo, nullptr, out);
+}
+
+
+void softmax(){
+
+}
 
 #define layer_norm_eps 1e-5f
 
